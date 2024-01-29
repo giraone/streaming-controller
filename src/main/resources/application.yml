@@ -1,0 +1,20 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: streaming
+
+logging:
+  level:
+    ROOT: WARN
+    com.giraone.streaming: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # health,prometheus is needed; the others are for troubleshooting
+        include: 'health,metrics,prometheus,loggers'
+
+

@@ -1,4 +1,6 @@
-# Demo for streaming large data (upload, download) with Spring Boot WebFlux
+# Demo for streaming large data (upload, download) with Spring Boot WebFlux 
+
+This includes a possibility to stream JSON or XML data containing Base64 encoded data.
 
 ## Build
 

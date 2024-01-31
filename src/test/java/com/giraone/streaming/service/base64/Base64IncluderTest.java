@@ -7,7 +7,6 @@ import com.giraone.streaming.service.FluxUtil;
 import com.giraone.streaming.service.pipe.ByteArrayOutputPart;
 import com.giraone.streaming.util.ObjectMapperBuilder;
 import org.assertj.core.data.Offset;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import reactor.core.publisher.Flux;
@@ -149,7 +148,7 @@ class Base64IncluderTest {
     void streamWithContent(String fluxInputString, String fluxOutputBase64) throws JsonProcessingException {
 
         // arrange
-        Object pojo = Map.of("attr1", "value1", "attr2", Base64Includer.CONTENT_TAG_1, "attr3", "value3");
+        Object pojo = Map.of("attribute1", "value1", "attribute2", Base64Includer.CONTENT_TAG_1, "attribute3", "value3");
         String json = OBJECT_MAPPER.writeValueAsString(pojo);
         Flux<ByteBuffer> input = Flux.just(ByteBuffer.wrap(fluxInputString.getBytes(StandardCharsets.UTF_8)));
 
@@ -160,7 +159,7 @@ class Base64IncluderTest {
         FluxUtil.writeToOutputStream(output, byteArrayOutputStream).block();
 
         // assert
-        String expected = "{\"attr1\":\"value1\",\"attr2\":\"" + fluxOutputBase64 + "\",\"attr3\":\"value3\"}";
+        String expected = "{\"attribute1\":\"value1\",\"attribute2\":\"" + fluxOutputBase64 + "\",\"attribute3\":\"value3\"}";
         assertThat(byteArrayOutputStream.toString(StandardCharsets.UTF_8)).isEqualTo(expected);
     }
 

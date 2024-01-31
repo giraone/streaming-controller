@@ -80,8 +80,8 @@ class StreamingControllerIT {
         LOGGER.info("{} bytes received", out.size());
         assertThat(out.size()).isGreaterThan(expectedFileSize);
         Map<String,Object> json = OBJECT_MAPPER.readValue(out.toByteArray(), JSON_MAP);
-        assertThat(json).containsKeys("attr1", "attr2", "attr3");
-        String base64 = (String) json.get("attr2");
+        assertThat(json).containsKeys("attribute1", "attribute2", "attribute3");
+        String base64 = (String) json.get("attribute2");
         assertThat(new String(Base64.getDecoder().decode(base64), StandardCharsets.UTF_8)).startsWith("0123456789");
     }
 

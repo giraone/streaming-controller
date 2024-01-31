@@ -67,7 +67,7 @@ public class StreamingController {
         }
 
         // An example for a JSON Java Pojo with one replacement token
-        Map<String, Object> pojo = Map.of("attr1", "one", "attr2", Base64Includer.CONTENT_TAG_1, "attr3", "three");
+        Map<String, Object> pojo = Map.of("attribute1", "one", "attribute2", Base64Includer.CONTENT_TAG_1, "attribute3", "three");
         String json;
         try {
             json = OBJECT_MAPPER.writeValueAsString(pojo);

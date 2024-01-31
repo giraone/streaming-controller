@@ -8,6 +8,14 @@ This includes a possibility to stream JSON or XML data containing Base64 encoded
 mvn package
 ```
 
+## Run
+
+This will run the application with only 256MByte of memory.
+
+```
+./run.sh
+```
+
 ## Usage
 
 Upload a file
@@ -36,9 +44,9 @@ curl --request GET \
 
 This should return the file.
 
-## Base64 included content within a JSON structure withour having the content in memory
+## Base64 included content within a JSON structure without having the content in memory
 
-Download the uploaded file, where the content in Base64 encoded in a JSON structure.
+Download the uploaded file, where the content is Base64 encoded in a JSON structure.
 
 ```bash
 curl --request GET \
@@ -50,5 +58,7 @@ curl --request GET \
 This should return
 
 ```json
-{"success":true, "size": 11111}
+{"attribute1":"one", "attribute2":"MDEyMzQ1 ... ... NjcQ1Njc4OQ==", "attribute3":"three"}
 ```
+
+where the Base64 value of *attribute1* part can be arbitrarily large.

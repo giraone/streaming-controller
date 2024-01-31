@@ -27,6 +27,7 @@ Download the uploaded file
 
 ```bash
 curl --request GET \
+  --silent \
   --output out.txt \
   http://localhost:8080/file/test.txt
 ```
@@ -39,7 +40,8 @@ Download the uploaded file, where the content in Base64 encoded in a JSON struct
 
 ```bash
 curl --request GET \
-  --output out.txt \
+  --silent \
+  --output out.json \
   http://localhost:8080/base64/test.txt
 ```
 

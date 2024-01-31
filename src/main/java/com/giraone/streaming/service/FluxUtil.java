@@ -16,11 +16,15 @@ import java.nio.channels.AsynchronousFileChannel;
 import java.nio.channels.WritableByteChannel;
 import java.nio.file.StandardOpenOption;
 
+/**
+ * * Parts of this are copied from
+ * * https://github.com/Azure/azure-sdk-for-java/blob/main/sdk/core/azure-core/src/main/java/com/azure/core/util/FluxUtil.java
+ */
 public final class FluxUtil {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(FluxUtil.class);
 
-    private static final int DEFAULT_CHUNK_SIZE = 1024 * 64;
+    public static final int DEFAULT_CHUNK_SIZE = 1024 * 64;
 
     // Hide
     private FluxUtil() {
@@ -49,7 +53,6 @@ public final class FluxUtil {
      * The response {@link Mono} will emit an error if {@code content} or {@code outFile} are null. Additionally, an
      * error will be emitted if the {@code outFile} wasn't opened with the proper open options, such as {@link
      * StandardOpenOption#WRITE}.
-     *
      * @param content The {@link Flux} of {@link ByteBuffer} content.
      * @param outFile The {@link AsynchronousFileChannel}.
      * @return A {@link Mono} which emits a completion status once the {@link Flux} has been written to the {@link
@@ -70,12 +73,10 @@ public final class FluxUtil {
      * The response {@link Mono} will emit an error if {@code content} or {@code outFile} are null or {@code position}
      * is less than 0. Additionally, an error will be emitted if the {@code outFile} wasn't opened with the proper open
      * options, such as {@link StandardOpenOption#WRITE}.
-     *
      * @param content The {@link Flux} of {@link ByteBuffer} content.
      * @param outFile The {@link AsynchronousFileChannel}.
      * @param position The position in the file to begin writing the {@code content}.
-     * @return A {@link Mono} which emits a completion status once the {@link Flux} has been written to the {@link
-     * AsynchronousFileChannel}.
+     * @return A {@link Mono} which emits a completion status once the {@link Flux} has been written to the {@link AsynchronousFileChannel}.
      * @throws NullPointerException When {@code content} is null.
      * @throws NullPointerException When {@code outFile} is null.
      * @throws IllegalArgumentException When {@code position} is negative.
@@ -101,7 +102,6 @@ public final class FluxUtil {
      * The {@code channel} is not closed by this call, closing of the {@code channel} is managed by the caller.
      * <p>
      * The response {@link Mono} will emit an error if {@code content} or {@code channel} are null.
-     *
      * @param content The {@link Flux} of {@link ByteBuffer} content.
      * @param channel The {@link AsynchronousByteChannel}.
      * @return A {@link Mono} which emits a completion status once the {@link Flux} has been written to the {@link
@@ -110,6 +110,7 @@ public final class FluxUtil {
      * @throws NullPointerException When {@code channel} is null.
      */
     public static Mono<Void> writeToAsynchronousByteChannel(Flux<ByteBuffer> content, AsynchronousByteChannel channel) {
+
         if (content == null && channel == null) {
             return monoError(LOGGER, new NullPointerException("'content' and 'channel' cannot be null."));
         } else if (content == null) {
@@ -128,7 +129,6 @@ public final class FluxUtil {
      * The {@code channel} is not closed by this call, closing of the {@code channel} is managed by the caller.
      * <p>
      * The response {@link Mono} will emit an error if {@code content} or {@code channel} are null.
-     *
      * @param content The {@link Flux} of {@link ByteBuffer} content.
      * @param channel The {@link WritableByteChannel}.
      * @return A {@link Mono} which emits a completion status once the {@link Flux} has been written to the {@link
@@ -137,6 +137,7 @@ public final class FluxUtil {
      * @throws NullPointerException When {@code channel} is null.
      */
     public static Mono<Void> writeToWritableByteChannel(Flux<ByteBuffer> content, WritableByteChannel channel) {
+
         if (content == null && channel == null) {
             return monoError(LOGGER, new NullPointerException("'content' and 'channel' cannot be null."));
         } else if (content == null) {
@@ -144,7 +145,6 @@ public final class FluxUtil {
         } else if (channel == null) {
             return monoError(LOGGER, new NullPointerException("'channel' cannot be null."));
         }
-
         return content.publishOn(Schedulers.boundedElastic())
             .map(buffer -> {
                 try {
@@ -161,20 +161,18 @@ public final class FluxUtil {
     /**
      * Creates a {@link Flux} from an {@link AsynchronousFileChannel} which reads part of a file into chunks of the
      * given size.
-     *
      * @param fileChannel The file channel.
      * @param chunkSize the size of file chunks to read.
      * @param offset The offset in the file to begin reading.
      * @param length The number of bytes to read from the file.
      * @return the Flux.
      */
-    public static Flux<ByteBuffer> readFile(AsynchronousFileChannel fileChannel, int chunkSize, long offset,                                            long length) {
+    public static Flux<ByteBuffer> readFile(AsynchronousFileChannel fileChannel, int chunkSize, long offset, long length) {
         return new FileReadFlux(fileChannel, chunkSize, offset, length);
     }
 
     /**
      * Creates a {@link Flux} from an {@link AsynchronousFileChannel} which reads part of a file.
-     *
      * @param fileChannel The file channel.
      * @param offset The offset in the file to begin reading.
      * @param length The number of bytes to read from the file.
@@ -186,13 +184,27 @@ public final class FluxUtil {
 
     /**
      * Creates a {@link Flux} from an {@link AsynchronousFileChannel} which reads the entire file.
-     *
+     * @param fileChannel The file channel.
+     * @param chunkSize the size of file chunks to read.
+     * @return The AsyncInputStream.
+     */
+    public static Flux<ByteBuffer> readFile(AsynchronousFileChannel fileChannel, int chunkSize) {
+        try {
+            final long size = fileChannel.size();
+            return readFile(fileChannel, chunkSize, 0, size);
+        } catch (IOException e) {
+            return Flux.error(new RuntimeException("Failed to read the file.", e));
+        }
+    }
+
+    /**
+     * Creates a {@link Flux} from an {@link AsynchronousFileChannel} which reads the entire file.
      * @param fileChannel The file channel.
      * @return The AsyncInputStream.
      */
     public static Flux<ByteBuffer> readFile(AsynchronousFileChannel fileChannel) {
         try {
-            long size = fileChannel.size();
+            final long size = fileChannel.size();
             return readFile(fileChannel, DEFAULT_CHUNK_SIZE, 0, size);
         } catch (IOException e) {
             return Flux.error(new RuntimeException("Failed to read the file.", e));
@@ -209,7 +221,6 @@ public final class FluxUtil {
      * <p>
      * The response {@link Mono} will emit an error if {@code content} or {@code stream} are null. Additionally, an
      * error will be emitted if an exception occurs while writing the {@code content} to the {@code stream}.
-     *
      * @param content The {@link Flux} of {@link ByteBuffer} content.
      * @param stream The {@link OutputStream} being written into.
      * @return A {@link Mono} which emits a completion status once the {@link Flux} has been written to the {@link
@@ -249,11 +260,9 @@ public final class FluxUtil {
             return;
         }
 
-        // Next begin checking for specific instances of OutputStream that may provide better writing options for
-        // direct ByteBuffers.
-        if (stream instanceof FileOutputStream) {
-            FileOutputStream fileOutputStream = (FileOutputStream) stream;
-            // Writing to the FileChannel directly may provide native optimizations for moving the OS managed memoryinto the file.
+        // Next begin checking for specific instances of OutputStream that may provide better writing options for direct ByteBuffers.
+        if (stream instanceof FileOutputStream fileOutputStream) {
+            // Writing to the FileChannel directly may provide native optimizations for moving the OS managed memory into the file.
             // Write will move both the OutputStream's and ByteBuffer's position so there is no need to perform
             // additional updates that are required when using the backing array.
             fileOutputStream.getChannel().write(buffer);
@@ -267,13 +276,12 @@ public final class FluxUtil {
     /**
      * Gets the content of the provided ByteBuffer as a byte array. This method will create a new byte array even if the
      * ByteBuffer can have optionally backing array.
-     *
      * @param byteBuffer the byte buffer
      * @return the byte array
      */
     public static byte[] byteBufferToArray(ByteBuffer byteBuffer) {
-        int length = byteBuffer.remaining();
-        byte[] byteArray = new byte[length];
+        final int length = byteBuffer.remaining();
+        final byte[] byteArray = new byte[length];
         byteBuffer.get(byteArray);
         return byteArray;
     }

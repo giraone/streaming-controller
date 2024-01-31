@@ -12,6 +12,10 @@ import java.nio.channels.CompletionHandler;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicLongFieldUpdater;
 
+/**
+ * Parts of this are copied from
+ * https://github.com/Azure/azure-sdk-for-java/blob/main/sdk/core/azure-core/src/main/java/com/azure/core/util/FluxUtil.java
+ */
 class FileReadFlux extends Flux<ByteBuffer> {
     private final AsynchronousFileChannel fileChannel;
     private final int chunkSize;
@@ -34,48 +38,42 @@ class FileReadFlux extends Flux<ByteBuffer> {
 
     static final class FileReadSubscription implements Subscription, CompletionHandler<Integer, ByteBuffer> {
         private static final int NOT_SET = -1;
-        private static final long serialVersionUID = -6831808726875304256L;
-        //
+
         private final Subscriber<? super ByteBuffer> subscriber;
         private volatile long position;
-        //
+
         private final AsynchronousFileChannel fileChannel;
         private final int chunkSize;
         private final long offset;
         private final long length;
-        //
+
         private volatile boolean done;
         private Throwable error;
         private volatile ByteBuffer next;
         private volatile boolean cancelled;
-        //
+
         volatile int wip;
-        static final AtomicIntegerFieldUpdater<FileReadSubscription> WIP =
+        static final AtomicIntegerFieldUpdater<FileReadSubscription> ATOMIC_WIP =
             AtomicIntegerFieldUpdater.newUpdater(FileReadSubscription.class, "wip");
 
         volatile long requested;
-        static final AtomicLongFieldUpdater<FileReadSubscription> REQUESTED =
+        static final AtomicLongFieldUpdater<FileReadSubscription> ATOMIC_REQUESTED =
             AtomicLongFieldUpdater.newUpdater(FileReadSubscription.class, "requested");
-        //
 
         FileReadSubscription(Subscriber<? super ByteBuffer> subscriber, AsynchronousFileChannel fileChannel,
                              int chunkSize, long offset, long length) {
             this.subscriber = subscriber;
-            //
             this.fileChannel = fileChannel;
             this.chunkSize = chunkSize;
             this.offset = offset;
             this.length = length;
-            //
             this.position = NOT_SET;
         }
-
-        //region Subscription implementation
 
         @Override
         public void request(long n) {
             if (Operators.validate(n)) {
-                Operators.addCap(REQUESTED, this, n);
+                Operators.addCap(ATOMIC_REQUESTED, this, n);
                 drain();
             }
         }
@@ -84,10 +82,6 @@ class FileReadFlux extends Flux<ByteBuffer> {
         public void cancel() {
             this.cancelled = true;
         }
-
-        //endregion
-
-        //region CompletionHandler implementation
 
         @Override
         public void completed(Integer bytesRead, ByteBuffer buffer) {
@@ -99,7 +93,6 @@ class FileReadFlux extends Flux<ByteBuffer> {
                     long pos = position;
                     int bytesWanted = Math.min(bytesRead, maxRequired(pos));
                     long position2 = pos + bytesWanted;
-                    //noinspection NonAtomicOperationOnVolatileField
                     position = position2;
                     buffer.position(bytesWanted);
                     buffer.flip();
@@ -115,18 +108,15 @@ class FileReadFlux extends Flux<ByteBuffer> {
         @Override
         public void failed(Throwable exc, ByteBuffer attachment) {
             if (!cancelled) {
-                // must set error before setting done to true
-                // so that is visible in drain loop
+                // must set error before setting done to true so that is visible in drain loop
                 error = exc;
                 done = true;
                 drain();
             }
         }
 
-        //endregion
-
         private void drain() {
-            if (WIP.getAndIncrement(this) != 0) {
+            if (ATOMIC_WIP.getAndIncrement(this) != 0) {
                 return;
             }
             // on first drain (first request) we initiate the first read
@@ -139,7 +129,7 @@ class FileReadFlux extends Flux<ByteBuffer> {
                 if (cancelled) {
                     return;
                 }
-                if (REQUESTED.get(this) > 0) {
+                if (ATOMIC_REQUESTED.get(this) > 0) {
                     boolean emitted = false;
                     // read d before next to avoid race
                     boolean d = done;
@@ -155,19 +145,16 @@ class FileReadFlux extends Flux<ByteBuffer> {
                         } else {
                             subscriber.onComplete();
                         }
-
                         // exit without reducing wip so that further drains will be NOOP
                         return;
                     }
                     if (emitted) {
-                        // do this after checking d to avoid calling read
-                        // when done
-                        Operators.produced(REQUESTED, this, 1);
-                        //
+                        // do this after checking d to avoid calling read when done
+                        Operators.produced(ATOMIC_REQUESTED, this, 1);
                         doRead();
                     }
                 }
-                missed = WIP.addAndGet(this, -missed);
+                missed = ATOMIC_WIP.addAndGet(this, -missed);
                 if (missed == 0) {
                     return;
                 }

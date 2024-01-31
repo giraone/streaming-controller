@@ -33,7 +33,6 @@ public class AsynchronousFileChannelAdapter implements AsynchronousByteChannel {
     /**
      * Creates an instance of {@link AsynchronousFileChannelAdapter} that adapts {@link AsynchronousFileChannel} to
      * {@link AsynchronousByteChannel}.
-     *
      * @param fileChannel The {@link AsynchronousFileChannel} to adapt.
      * @param position The position to start reading from or writing to.
      */

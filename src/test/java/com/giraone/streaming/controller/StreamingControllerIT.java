@@ -1,5 +1,7 @@
 package com.giraone.streaming.controller;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.giraone.streaming.service.FluxUtil;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -10,15 +12,16 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
-import org.springframework.web.reactive.function.BodyInserter;
 import org.springframework.web.reactive.function.BodyInserters;
 import reactor.core.publisher.Flux;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousFileChannel;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
@@ -32,8 +35,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 class StreamingControllerIT {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(StreamingControllerIT.class);
-
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final ParameterizedTypeReference<Map<String, Object>> MAP = new ParameterizedTypeReference<>() {
+    };
+    private static final TypeReference<Map<String, Object>> JSON_MAP = new TypeReference<>() {
     };
 
     @Autowired
@@ -56,8 +61,28 @@ class StreamingControllerIT {
         target.deleteOnExit();
         AsynchronousFileChannel channel = AsynchronousFileChannel.open(target.toPath(), CREATE, WRITE);
         FluxUtil.writeFile(content, channel).block();
-        assertThat(target.exists()).isTrue();
-        assertThat(target.length()).isEqualTo(expectedFileSize);
+        assertThat(target).exists().hasSize(expectedFileSize);
+    }
+
+    @Test
+    void downloadJsonBase64() throws IOException {
+
+        final int expectedFileSize = 10240 * 4 / 3;
+        Flux<ByteBuffer> content = webTestClient.get()
+            .uri("/base64/file-10k.bin")
+            .exchange()
+            .expectStatus().isOk()
+            .expectHeader().contentType(MediaType.APPLICATION_JSON_VALUE)
+            .returnResult(ByteBuffer.class)
+            .getResponseBody();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        FluxUtil.writeToOutputStream(content,out).block();
+        LOGGER.info("{} bytes received", out.size());
+        assertThat(out.size()).isGreaterThan(expectedFileSize);
+        Map<String,Object> json = OBJECT_MAPPER.readValue(out.toByteArray(), JSON_MAP);
+        assertThat(json).containsKeys("attr1", "attr2", "attr3");
+        String base64 = (String) json.get("attr2");
+        assertThat(new String(Base64.getDecoder().decode(base64), StandardCharsets.UTF_8)).startsWith("0123456789");
     }
 
     @Test
@@ -78,8 +103,7 @@ class StreamingControllerIT {
             )));
 
         File target = new File(StreamingController.FILE_BASE, filename);
-        assertThat(target.exists()).isTrue();
-        assertThat(target.length()).isEqualTo(fileSize);
+        assertThat(target).exists().hasSize(fileSize);
         assertThat(target.delete()).isTrue();
     }
 
@@ -88,8 +112,11 @@ class StreamingControllerIT {
 
         byte[] oneBuffer = "0123456789".repeat(100).getBytes(StandardCharsets.UTF_8);
         AtomicLong fileSize = new AtomicLong();
-        Flux<ByteBuffer> publisher = Flux.range(1,10).map(i -> { fileSize.getAndAdd(oneBuffer.length); return ByteBuffer.wrap(oneBuffer); });
-        BodyInserter bodyInserter = BodyInserters.fromPublisher(publisher, ByteBuffer.class);
+        Flux<ByteBuffer> publisher = Flux.range(1, 10).map(i -> {
+            fileSize.getAndAdd(oneBuffer.length);
+            return ByteBuffer.wrap(oneBuffer);
+        });
+        var bodyInserter = BodyInserters.fromPublisher(publisher, ByteBuffer.class);
         String filename = "post-" + UUID.randomUUID() + ".txt";
         webTestClient.post()
             .uri("/file/{filename}", filename)
@@ -104,8 +131,7 @@ class StreamingControllerIT {
             )));
 
         File target = new File(StreamingController.FILE_BASE, filename);
-        assertThat(target.exists()).isTrue();
-        assertThat(target.length()).isEqualTo(fileSize.get());
+        assertThat(target).exists().hasSize(fileSize.get());
         assertThat(target.delete()).isTrue();
     }
 }

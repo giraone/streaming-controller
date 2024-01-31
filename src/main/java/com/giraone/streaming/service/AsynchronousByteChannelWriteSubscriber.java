@@ -26,7 +26,6 @@ public final class AsynchronousByteChannelWriteSubscriber implements Subscriber<
     /**
      * Creates a subscriber that writes a stream of {@link ByteBuffer ByteBuffers} to a
      * {@link AsynchronousByteChannel}.
-     *
      * @param channel The channel to write the stream of {@link ByteBuffer ByteBuffers} to.
      * @param emitter The emitter to signal when the stream has been written, or an error has occurred.
      */

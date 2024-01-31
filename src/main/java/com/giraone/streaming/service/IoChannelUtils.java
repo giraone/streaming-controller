@@ -42,7 +42,7 @@ public final class IoChannelUtils {
      * @throws NullPointerException When {@code fileChannel} is null.
      * @throws IllegalArgumentException When {@code position} is negative.
      */
-    public static AsynchronousByteChannel toAsynchronousByteChannel(AsynchronousFileChannel fileChannel,                                                                   long position) {
+    public static AsynchronousByteChannel toAsynchronousByteChannel(AsynchronousFileChannel fileChannel, long position) {
         Objects.requireNonNull(fileChannel, "'fileChannel' must not be null");
         if (position < 0) {
             throw new IllegalArgumentException("'position' cannot be less than 0.");
@@ -52,7 +52,6 @@ public final class IoChannelUtils {
 
     /**
      * Transfers bytes from {@link ReadableByteChannel} to {@link WritableByteChannel}.
-     *
      * @param source A source {@link ReadableByteChannel}.
      * @param destination A destination {@link WritableByteChannel}.
      * @throws IOException When I/O operation fails.
@@ -64,7 +63,6 @@ public final class IoChannelUtils {
 
     /**
      * Transfers bytes from {@link ReadableByteChannel} to {@link WritableByteChannel}.
-     *
      * @param source A source {@link ReadableByteChannel}.
      * @param destination A destination {@link WritableByteChannel}.
      * @param estimatedSourceSize An estimated size of the source channel, may be null. Used to better determine the
@@ -95,7 +93,6 @@ public final class IoChannelUtils {
 
     /**
      * Transfers bytes from {@link ReadableByteChannel} to {@link AsynchronousByteChannel}.
-     *
      * @param source A source {@link ReadableByteChannel}.
      * @param destination A destination {@link AsynchronousByteChannel}.
      * @return A {@link Mono} that completes when transfer is finished.
@@ -107,7 +104,6 @@ public final class IoChannelUtils {
 
     /**
      * Transfers bytes from {@link ReadableByteChannel} to {@link AsynchronousByteChannel}.
-     *
      * @param source A source {@link ReadableByteChannel}.
      * @param destination A destination {@link AsynchronousByteChannel}.
      * @param estimatedSourceSize An estimated size of the source channel, may be null. Used to better determine the
@@ -173,7 +169,6 @@ public final class IoChannelUtils {
      * <p>
      * This handles scenarios where write operations don't write the entirety of the {@link ByteBuffer} in a single
      * call.
-     *
      * @param buffer The {@link ByteBuffer} to write.
      * @param channel The {@link WritableByteChannel} to write the {@code buffer} to.
      * @throws IOException If an I/O error occurs while writing to the {@code channel}.

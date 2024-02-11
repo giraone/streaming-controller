@@ -52,11 +52,11 @@ class StreamingControllerIT {
             .uri("/file/file-10k.bin")
             .exchange()
             .expectStatus().isOk()
-            .expectHeader().contentType(MediaType.TEXT_PLAIN)
+            .expectHeader().contentType(MediaType.APPLICATION_OCTET_STREAM)
             .expectHeader().contentLength(expectedFileSize)
             .returnResult(ByteBuffer.class)
             .getResponseBody();
-        File target = File.createTempFile("test-", ".txt");
+        File target = File.createTempFile("test-", ".bin");
         LOGGER.info("Write to {}", target);
         target.deleteOnExit();
         AsynchronousFileChannel channel = AsynchronousFileChannel.open(target.toPath(), CREATE, WRITE);

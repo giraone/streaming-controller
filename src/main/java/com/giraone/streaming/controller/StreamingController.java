@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousFileChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.NoSuchFileException;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
@@ -33,6 +34,7 @@ import static java.nio.file.StandardOpenOption.*;
 public class StreamingController {
 
     public static final File FILE_BASE = new File("FILES");
+    public static final String X_HEADER_ERROR = "X-Files-Error";
 
     private static final Logger LOGGER = LoggerFactory.getLogger(StreamingController.class);
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -41,58 +43,7 @@ public class StreamingController {
     private static final String ATTR_SIZE = "size";
     private static final String ATTR_ERROR = "error";
 
-    @GetMapping("file/{filename}")
-    ResponseEntity<Flux<ByteBuffer>> downloadFile(@PathVariable String filename) {
-
-        if (isFileNameInvalid(filename)) {
-            return ResponseEntity.badRequest().body(Flux.just(ByteBuffer.wrap("Invalid download filename!".getBytes(StandardCharsets.UTF_8))));
-        }
-        final File file = new File(FILE_BASE, filename);
-        final long contentLength = file.length();
-        final AsynchronousFileChannel channel;
-        try {
-            channel = AsynchronousFileChannel.open(file.toPath(), READ);
-        } catch (IOException e) {
-            LOGGER.warn("Cannot open file to read from \"{}\"!", file.getAbsolutePath(), e);
-            return ResponseEntity.badRequest().body(Flux.just(ByteBuffer.wrap("Cannot open file!".getBytes(StandardCharsets.UTF_8))));
-        }
-        return streamToWebClient(FluxUtil.readFile(channel), MediaType.TEXT_PLAIN_VALUE, contentLength);
-    }
-
-    @GetMapping("base64/{filename}")
-    ResponseEntity<Flux<ByteBuffer>> downloadFileBas64(@PathVariable String filename) {
-
-        if (isFileNameInvalid(filename)) {
-            return ResponseEntity.badRequest().body(Flux.just(ByteBuffer.wrap("Invalid inclusion filename!".getBytes(StandardCharsets.UTF_8))));
-        }
-
-        // An example for a JSON Java Pojo with one replacement token
-        Map<String, Object> pojo = Map.of("attribute1", "one", "attribute2", Base64Includer.CONTENT_TAG_1, "attribute3", "three");
-        String json;
-        try {
-            json = OBJECT_MAPPER.writeValueAsString(pojo);
-        } catch (JsonProcessingException e) {
-            LOGGER.warn("Cannot create wrapper json from \"{}\"!", pojo, e);
-            return ResponseEntity.badRequest().body(Flux.just(ByteBuffer.wrap("Cannot create wrapper json!".getBytes(StandardCharsets.UTF_8))));
-        }
-
-        // A file, that is read an included in the output as a replacement for the token
-        final File file = new File(FILE_BASE, filename);
-        // If we want to support a content length in the HTTP response header, we can use this utility
-        final long contentLength = json.length() + Base64Includer.calculateBase64Size((int) file.length()) - Base64Includer.CONTENT_TAG_1.length();
-        final AsynchronousFileChannel channel;
-        try {
-            channel = AsynchronousFileChannel.open(file.toPath(), READ);
-        } catch (IOException e) {
-            LOGGER.warn("Cannot open file to read from \"{}\"!", file.getAbsolutePath(), e);
-            return ResponseEntity.badRequest().body(Flux.just(ByteBuffer.wrap("Cannot open file!".getBytes(StandardCharsets.UTF_8))));
-        }
-        final Base64Includer base64Includer = new Base64Includer(json);
-        // Now we have a Flux<ByteBuffer>, that is the input for the "base64Includer"
-        final Flux<ByteBuffer> inputByteBufferFlux = FluxUtil.readFile(channel);
-        return streamToWebClient(base64Includer.streamWithContent(inputByteBufferFlux), MediaType.APPLICATION_JSON_VALUE, contentLength);
-    }
-
+    @SuppressWarnings("unused")
     @PostMapping("file/{filename}")
     Mono<ResponseEntity<Map<String, Object>>> uploadFile(@PathVariable String filename,
                                                          @RequestBody Flux<ByteBuffer> content,
@@ -127,26 +78,88 @@ public class StreamingController {
             )));
     }
 
+    @SuppressWarnings("unused")
+    @GetMapping("file/{filename}")
+    ResponseEntity<Flux<ByteBuffer>> downloadFile(@PathVariable String filename) {
+
+        if (isFileNameInvalid(filename)) {
+            return ResponseEntity.badRequest().header(X_HEADER_ERROR, "Invalid download filename!").build();
+        }
+        final File file = new File(FILE_BASE, filename);
+        final MediaType mediaType = mediaTypeFromFileName(filename);
+        final long contentLength = file.length();
+        final AsynchronousFileChannel channel;
+        try {
+            channel = AsynchronousFileChannel.open(file.toPath(), READ);
+        } catch (NoSuchFileException nsfe) {
+            LOGGER.warn("File \"{}\" does not exist! {}", file.getAbsolutePath(), nsfe.getMessage());
+            return ResponseEntity.notFound().header(X_HEADER_ERROR, "File does not exist!").build();
+        } catch (IOException e) {
+            LOGGER.warn("Cannot open file to read from \"{}\"! {}", file.getAbsolutePath(), e.getMessage());
+            return ResponseEntity.badRequest().header(X_HEADER_ERROR, "Cannot read file!").build();
+        }
+        return streamToWebClient(FluxUtil.readFile(channel), mediaType.toString(), contentLength);
+    }
+
+    @SuppressWarnings("unused")
+    @GetMapping("base64/{filename}")
+    ResponseEntity<Flux<ByteBuffer>> downloadFileBas64(@PathVariable String filename) {
+
+        if (isFileNameInvalid(filename)) {
+            return ResponseEntity.badRequest().header(X_HEADER_ERROR, "Invalid inclusion filename!").build();
+        }
+
+        // An example for a JSON Java Pojo with one replacement token
+        Map<String, Object> pojo = Map.of("attribute1", "one", "attribute2", Base64Includer.CONTENT_TAG_1, "attribute3", "three");
+        String json;
+        try {
+            json = OBJECT_MAPPER.writeValueAsString(pojo);
+        } catch (JsonProcessingException e) {
+            LOGGER.warn("Cannot create wrapper json from \"{}\"!", pojo, e);
+            return ResponseEntity.badRequest().body(Flux.just(ByteBuffer.wrap("Cannot create wrapper json!".getBytes(StandardCharsets.UTF_8))));
+        }
+
+        // A file, that is read an included in the output as a replacement for the token
+        final File file = new File(FILE_BASE, filename);
+        // If we want to support a content length in the HTTP response header, we can use this utility
+        final long contentLength = json.length() + Base64Includer.calculateBase64Size((int) file.length()) - Base64Includer.CONTENT_TAG_1.length();
+        final AsynchronousFileChannel channel;
+        try {
+            channel = AsynchronousFileChannel.open(file.toPath(), READ);
+        } catch (NoSuchFileException nsfe) {
+            LOGGER.warn("File \"{}\" does not exist! {}", file.getAbsolutePath(), nsfe.getMessage());
+            return ResponseEntity.notFound().header(X_HEADER_ERROR, "File does not exist!").build();
+        } catch (IOException e) {
+            LOGGER.warn("Cannot open file to read from \"{}\"! {}", file.getAbsolutePath(), e.getMessage());
+            return ResponseEntity.badRequest().header(X_HEADER_ERROR, "Cannot read file!").build();
+        }
+        final Base64Includer base64Includer = new Base64Includer(json);
+        // Now we have a Flux<ByteBuffer>, that is the input for the "base64Includer"
+        final Flux<ByteBuffer> inputByteBufferFlux = FluxUtil.readFile(channel);
+        return streamToWebClient(base64Includer.streamWithContent(inputByteBufferFlux), MediaType.APPLICATION_JSON_VALUE, contentLength);
+    }
+
     //------------------------------------------------------------------------------------------------------------------
 
-    private boolean isFileNameInvalid(String filename) {
+    private static boolean isFileNameInvalid(String filename) {
         return !FILE_NAME_PATTERN.matcher(filename).matches();
     }
 
-    private ResponseEntity<Flux<ByteBuffer>> streamToWebClient(Flux<ByteBuffer> content, String mediaType, long contentLength) {
+    private static MediaType mediaTypeFromFileName(String filename) {
+
+        if (filename.endsWith(".txt")) {
+            return MediaType.TEXT_PLAIN;
+        } else {
+            return MediaType.APPLICATION_OCTET_STREAM;
+        }
+    }
+
+    private static ResponseEntity<Flux<ByteBuffer>> streamToWebClient(Flux<ByteBuffer> content, String mediaType, long contentLength) {
 
         return ResponseEntity
             .ok()
             .header("Content-Type", mediaType)
             .header("Content-Length", Long.toString(contentLength))
-            .body(content);
-    }
-
-    private ResponseEntity<Flux<ByteBuffer>> streamToWebClient(Flux<ByteBuffer> content, String mediaType) {
-
-        return ResponseEntity
-            .ok()
-            .header("Content-Type", mediaType)
             .body(content);
     }
 }

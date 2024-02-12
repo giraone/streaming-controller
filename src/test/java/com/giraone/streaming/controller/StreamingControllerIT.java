@@ -65,11 +65,11 @@ class StreamingControllerIT {
     }
 
     @Test
-    void downloadJsonBase64() throws IOException {
+    void downloadJson1Base64() throws IOException {
 
         final int expectedFileSize = 10240 * 4 / 3;
         Flux<ByteBuffer> content = webTestClient.get()
-            .uri("/base64/file-10k.bin")
+            .uri("/base64-1/file-10k.bin")
             .exchange()
             .expectStatus().isOk()
             .expectHeader().contentType(MediaType.APPLICATION_JSON_VALUE)
@@ -79,10 +79,37 @@ class StreamingControllerIT {
         FluxUtil.writeToOutputStream(content,out).block();
         LOGGER.info("{} bytes received", out.size());
         assertThat(out.size()).isGreaterThan(expectedFileSize);
-        Map<String,Object> json = OBJECT_MAPPER.readValue(out.toByteArray(), JSON_MAP);
+        String outString = out.toString(StandardCharsets.UTF_8);
+        assertThat(outString).doesNotContain("<base64-");
+        Map<String,Object> json = OBJECT_MAPPER.readValue(outString, JSON_MAP);
         assertThat(json).containsKeys("attribute1", "attribute2", "attribute3");
         String base64 = (String) json.get("attribute2");
         assertThat(new String(Base64.getDecoder().decode(base64), StandardCharsets.UTF_8)).startsWith("0123456789");
+    }
+
+    @Test
+    void downloadJson2Base64() throws IOException {
+
+        final int expectedFileSize = (10240 + 20480) * 4 / 3;
+        Flux<ByteBuffer> content = webTestClient.get()
+            .uri("/base64-2/file-10k.bin/file-20k.bin")
+            .exchange()
+            .expectStatus().isOk()
+            .expectHeader().contentType(MediaType.APPLICATION_JSON_VALUE)
+            .returnResult(ByteBuffer.class)
+            .getResponseBody();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        FluxUtil.writeToOutputStream(content,out).block();
+        LOGGER.info("{} bytes received", out.size());
+        assertThat(out.size()).isGreaterThan(expectedFileSize);
+        String outString = out.toString(StandardCharsets.UTF_8);
+        assertThat(outString).doesNotContain("<base64-");
+        Map<String,Object> json = OBJECT_MAPPER.readValue(outString, JSON_MAP);
+        assertThat(json).containsKeys("attribute1", "attribute2", "attribute3", "attribute4", "attribute5");
+        String base64_1 = (String) json.get("attribute2");
+        assertThat(new String(Base64.getDecoder().decode(base64_1), StandardCharsets.UTF_8)).startsWith("0123456789");
+        String base64_2 = (String) json.get("attribute4");
+        assertThat(new String(Base64.getDecoder().decode(base64_2), StandardCharsets.UTF_8)).startsWith("0123456789");
     }
 
     @Test

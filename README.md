@@ -48,17 +48,31 @@ This should return the file.
 
 Download the uploaded file, where the content is Base64 encoded in a JSON structure.
 
+
 ```bash
 curl --request GET \
   --silent \
   --output out.json \
-  http://localhost:8080/base64/test.txt
+  http://localhost:8080/base64-1/test1.txt
 ```
 
 This should return
 
 ```json
-{"attribute1":"one", "attribute2":"MDEyMzQ1 ... ... NjcQ1Njc4OQ==", "attribute3":"three"}
+{"attribute1":"one","attribute2":"SGVsbG8gRXVyb3BlIQ==","attribute3":"three"}
 ```
 
-where the Base64 value of *attribute1* part can be arbitrarily large.
+```bash 
+curl --request GET \
+  --silent \
+  --output out.json \
+  http://localhost:8080/base64-2/test1.txt/test2.txt  
+```
+
+This should return
+
+```json
+{"attribute1":"one","attribute2":"SGVsbG8gRXVyb3BlIQ==","attribute3":"three","attribute4":"SGVsbG8gV29ybGQh","attribute5":"five"}
+```
+
+where the Base64 value of *attribute2* and *attribute4* can be arbitrarily large, when other files are used.

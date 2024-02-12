@@ -10,7 +10,6 @@ import org.assertj.core.data.Offset;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import reactor.core.publisher.Flux;
-import reactor.util.function.Tuple2;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -19,6 +18,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousFileChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 
 import static java.nio.file.StandardOpenOption.READ;
@@ -31,16 +31,15 @@ class Base64IncluderTest {
 
     @ParameterizedTest
     @CsvSource({
-        "any,any,''",
-        "header<base64-1>footer,header,footer"
+        "0,0",
+        "1,4",
+        "2,4",
+        "3,4",
+        "4,8",
     })
-    void split(String jsonString, String expectedT1, String expectedT2) {
+    void calculateBase64Size(int input, int expected) {
 
-        // act
-        Tuple2<String, String> t = Base64Includer.split(jsonString);
-        // assert
-        assertThat(t.getT1()).isEqualTo(expectedT1);
-        assertThat(t.getT2()).isEqualTo(expectedT2);
+        assertThat(Base64Includer.calculateBase64Size(input)).isEqualTo(expected);
     }
 
     @ParameterizedTest
@@ -77,6 +76,30 @@ class Base64IncluderTest {
         byte[] actual = Base64Includer.buildArray(s1.getBytes(StandardCharsets.UTF_8), l1, s2.getBytes(StandardCharsets.UTF_8));
         // assert
         assertThat(new String(actual, StandardCharsets.UTF_8)).isEqualTo(expected);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "any,any,,,",
+        "header<base64-1>footer,header,footer,,",
+        "header<base64-1>intermediate1<base64-2>footer,header,intermediate1,footer,",
+        "header<base64-1>intermediate1<base64-2>intermediate2<base64-3>footer,header,intermediate1,intermediate2,footer"
+    })
+    void split(String jsonString, String expected0, String expected1, String expected2, String expected3) {
+
+        // act
+        List<String> t = Base64Includer.split(jsonString);
+        // assert
+        assertThat(t.get(0)).isEqualTo(expected0);
+        if (expected1 != null) {
+            assertThat(t.get(1)).isEqualTo(expected1);
+        }
+        if (expected2 != null) {
+            assertThat(t.get(2)).isEqualTo(expected2);
+        }
+        if (expected3 != null) {
+            assertThat(t.get(3)).isEqualTo(expected3);
+        }
     }
 
     @ParameterizedTest
@@ -145,16 +168,20 @@ class Base64IncluderTest {
         "01234567890123456789012345678901,MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=",
         "012345678901234567890123456789012,MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDEy",
     })
-    void streamWithContent(String fluxInputString, String fluxOutputBase64) throws JsonProcessingException {
+    void streamWithContent2(String fluxInputString, String fluxOutputBase64) throws JsonProcessingException {
 
         // arrange
-        Object pojo = Map.of("attribute1", "value1", "attribute2", Base64Includer.CONTENT_TAG_1, "attribute3", "value3");
+        Object pojo = Map.of(
+            "attribute1", "value1",
+            "attribute2", Base64Includer.CONTENT_TAG_1,
+            "attribute3", "value3"
+        );
         String json = OBJECT_MAPPER.writeValueAsString(pojo);
         Flux<ByteBuffer> input = Flux.just(ByteBuffer.wrap(fluxInputString.getBytes(StandardCharsets.UTF_8)));
 
         // act
         Base64Includer base64Includer = new Base64Includer(json);
-        Flux<ByteBuffer> output = base64Includer.streamWithContent(input);
+        Flux<ByteBuffer> output = base64Includer.streamWithContent(List.of(input));
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         FluxUtil.writeToOutputStream(output, byteArrayOutputStream).block();
 
@@ -165,14 +192,34 @@ class Base64IncluderTest {
 
     @ParameterizedTest
     @CsvSource({
-        "0,0",
-        "1,4",
-        "2,4",
-        "3,4",
-        "4,8",
+        "0123456789012345678901234567890,01234567890123456789012345678901,MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MA==,MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=",
+        "01234567890123456789012345678901,012345678901234567890123456789012,MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=,MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDEy",
+        "012345678901234567890123456789012,0123456789012345678901234567890123,MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDEy,MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDEyMw==",
     })
-    void calculateBase64Size(int input, int expected) {
+    void streamWithContent3(String fluxInputString1, String fluxInputString2, String fluxOutput1Base64, String fluxOutput2Base64) throws JsonProcessingException {
 
-        assertThat(Base64Includer.calculateBase64Size(input)).isEqualTo(expected);
+        // arrange
+        Object pojo = Map.of(
+            "attribute1", "value1",
+            "attribute2", Base64Includer.CONTENT_TAG_1,
+            "attribute3", "value3",
+            "attribute4", Base64Includer.CONTENT_TAG_2,
+            "attribute5", "value5"
+        );
+        String json = OBJECT_MAPPER.writeValueAsString(pojo);
+        Flux<ByteBuffer> input1 = Flux.just(ByteBuffer.wrap(fluxInputString1.getBytes(StandardCharsets.UTF_8)));
+        Flux<ByteBuffer> input2 = Flux.just(ByteBuffer.wrap(fluxInputString2.getBytes(StandardCharsets.UTF_8)));
+
+        // act
+        Base64Includer base64Includer = new Base64Includer(json);
+        Flux<ByteBuffer> output = base64Includer.streamWithContent(List.of(input1, input2));
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        FluxUtil.writeToOutputStream(output, byteArrayOutputStream).block();
+
+        // assert
+        String expected = "{\"attribute1\":\"value1\",\"attribute2\":\""
+            + fluxOutput1Base64 + "\",\"attribute3\":\"value3\",\"attribute4\":\""
+            + fluxOutput2Base64 + "\",\"attribute5\":\"value5\"}";
+        assertThat(byteArrayOutputStream.toString(StandardCharsets.UTF_8)).isEqualTo(expected);
     }
 }

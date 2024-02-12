@@ -5,27 +5,39 @@ import com.giraone.streaming.service.pipe.PipeFluxByteBuffer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
-import reactor.util.function.Tuple2;
-import reactor.util.function.Tuples;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * A class to include base64 encoded content in JSON or XML structures.
+ * A maximum of 9 tokens can be replaced by base64 encoded data streams.
  * Basically this is a kind of "templating", where variables are replaced by large data, that
  * is BASE64 encoded and fetched from a Flux<ByteBuffer>> stream.
  */
 public class Base64Includer {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Base64Includer.class);
-    public static final String CONTENT_TAG_1 = "<base64-1>";
 
-    private final Tuple2<Flux<ByteBuffer>, Flux<ByteBuffer>> streamTuple;
+    public static final String CONTENT_TAG_1 = "<base64-1>";
+    public static final String CONTENT_TAG_2 = "<base64-2>";
+    public static final String CONTENT_TAG_3 = "<base64-3>";
+    public static final String CONTENT_TAG_4 = "<base64-4>";
+    public static final String CONTENT_TAG_5 = "<base64-5>";
+    public static final String CONTENT_TAG_6 = "<base64-6>";
+    public static final String CONTENT_TAG_7 = "<base64-7>";
+    public static final String CONTENT_TAG_8 = "<base64-8>";
+    public static final String CONTENT_TAG_9 = "<base64-9>";
+
+    private final List<Flux<ByteBuffer>> streams;
 
     /**
      * Create new instance using the given template string (JSON, XML), that can contain
@@ -33,20 +45,26 @@ public class Base64Includer {
      * @param json a JSON string
      */
     public Base64Includer(String json) {
-        this.streamTuple = splitToFlux(json);
+        this.streams = splitToFlux(json);
     }
 
     /**
      * Stream the stored JSON or XML structure together with the Base64 encoded content.
-     * @param content Content to be base64 encoded and included in the output.
+     * @param contents List of contents to be base64 encoded and included in the output.
      * @return an output Flux of ByteBuffers
      */
-    public Flux<ByteBuffer> streamWithContent(Flux<ByteBuffer> content) {
-        return Flux.concat(
-            streamTuple.getT1(),
-            base64Encode(content),
-            streamTuple.getT2()
-        );
+    public Flux<ByteBuffer> streamWithContent(List<Flux<ByteBuffer>> contents) {
+
+        LOGGER.info("Stream {} contents with {} stream parts", contents.size(), streams.size());
+        final List<Flux<ByteBuffer>> publishers = new ArrayList<>();
+        int index = 0;
+        for (; index < streams.size() - 1; index++) {
+            publishers.add(streams.get(index));
+            publishers.add(base64Encode(contents.get(index)));
+        }
+        publishers.add(streams.get(index));
+        LOGGER.info("#Publishers = {}", publishers.size());
+        return Flux.concat(publishers);
     }
 
     /**
@@ -105,24 +123,31 @@ public class Base64Includer {
         return new ByteArrayOutputPart(output, 0, encoded);
     }
 
-    static Tuple2<Flux<ByteBuffer>, Flux<ByteBuffer>> splitToFlux(String input) {
+    static List<Flux<ByteBuffer>> splitToFlux(String input) {
 
-        final Tuple2<String, String> stringTuple = split(input);
-        return Tuples.of(
-            Flux.just(ByteBuffer.wrap(stringTuple.getT1().getBytes(StandardCharsets.UTF_8))),
-            Flux.just(ByteBuffer.wrap(stringTuple.getT2().getBytes(StandardCharsets.UTF_8)))
-        );
+        final List<String> strings = split(input);
+        return strings.stream()
+            .map(s -> Flux.just(ByteBuffer.wrap(s.getBytes(StandardCharsets.UTF_8))))
+            .toList();
     }
 
-    static Tuple2<String, String> split(String input) {
+    static List<String> split(String input) {
 
-        final int i = input.indexOf(CONTENT_TAG_1);
-        if (i == -1) {
-            LOGGER.warn("No \"{}\" found in input \"{}\"", CONTENT_TAG_1, input);
-            return Tuples.of(input, "");
+        String s = input;
+        List<String> ret = new ArrayList<>();
+        for (int index = 1; index <= 9; index++) {
+            final String tag = "^(.*)(<base64-" + index + ">)(.*)$";
+            final Pattern pattern = Pattern.compile(tag);
+            final Matcher matcher = pattern.matcher(s);
+            if (matcher.matches()) {
+                final String before = s.substring(0, matcher.start(2));
+                ret.add(before);
+                s = s.substring(matcher.start(3));
+            } else {
+                ret.add(s);
+                break;
+            }
         }
-        final String header = input.substring(0, i);
-        final String footer = input.substring(i + CONTENT_TAG_1.length());
-        return Tuples.of(header, footer);
+        return ret;
     }
 }
